@@ -62,7 +62,7 @@ export default async function handler(req: NextRequest) {
       .createModeration({ input: sanitizedQuery })
       .then((res) => res.json())
 
-    const [results]:StreamResponse[] = (moderationResponse.results || [])
+    const [results]:StreamResponse[] = moderationResponse.results
 
     if (results.flagged) {
       throw new UserError('Flagged content', {
