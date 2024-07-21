@@ -16,11 +16,6 @@ const openAiKey = process.env.OPENAI_KEY
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-export interface StreamResponse {
-    results?: [];
-}
-  
-  
 const config = new Configuration({
   apiKey: openAiKey,
 })
@@ -62,7 +57,7 @@ export default async function handler(req: NextRequest) {
       .createModeration({ input: sanitizedQuery })
       .then((res) => res.json())
 
-    const [results]:StreamResponse[] = moderationResponse.results
+    const [results] = moderationResponse?.results
 
     if (results.flagged) {
       throw new UserError('Flagged content', {
