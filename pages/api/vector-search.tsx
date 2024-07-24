@@ -113,9 +113,8 @@ export default async function handler(req: NextRequest) {
 
     const prompt = codeBlock`
       ${oneLine`
-        You are a very enthusiastic representative for a software as a service company called Patent AI
-        who loves to help design patents based upon the high quality patent drafts and proprietary information provided to you. Answer the questions using the provided information,
-        outputted in markdown format. If you are unsure about the answer, say
+        You are a very enthusiastic representative for a software as a service company called PatentAI-0724
+        who loves to help design patents based upon the high quality patent drafts and proprietary information provided to you. Answer the questions based on the information provided while outputting your response in markdown format. If you are unsure about the answer, say
         "Sorry, I don't know how to help with that."
       `}
 
