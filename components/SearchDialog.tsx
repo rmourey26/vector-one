@@ -77,9 +77,9 @@ export function SearchDialog() {
       <Dialog open={open}>
         <DialogContent className="sm:max-w-[850px] max-h-[80vh] overflow-y-auto text-black">
           <DialogHeader>
-            <DialogTitle>PatentAI-0724 SaaS Demo</DialogTitle>
+            <DialogTitle>PatentAI-0724 Text Embedding App </DialogTitle>
             <DialogDescription>
-              Generate patents with PatentAI-0724
+             NextJS TypeScript web app with OpenAI's text embedding model, ChatGPT, and a vectorized Supabase DB. 
             </DialogDescription>
             <hr />
             <button className="absolute top-0 right-2 p-2" onClick={() => setOpen(false)}>
