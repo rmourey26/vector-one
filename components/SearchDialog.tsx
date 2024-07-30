@@ -79,7 +79,7 @@ export function SearchDialog() {
           <DialogHeader>
             <DialogTitle>PatentAI-0724 Text Embedding App </DialogTitle>
             <DialogDescription>
-             Augment ChatGPT`&lsquo`s knowledge with your own data and without any code.  
+             Augment ChatGPT knowledge with your own data and without any code.  
             </DialogDescription>
             <hr />
             <button className="absolute top-0 right-2 p-2" onClick={() => setOpen(false)}>
