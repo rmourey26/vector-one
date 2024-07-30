@@ -79,7 +79,7 @@ export function SearchDialog() {
           <DialogHeader>
             <DialogTitle>PatentAI-0724 Text Embedding App </DialogTitle>
             <DialogDescription>
-             NextJS TypeScript web app with OpenAI's text embedding model, ChatGPT, and a vectorized Supabase DB. 
+             Augment ChatGPT`&lsquo`s knowledge with your own data and without any code.  
             </DialogDescription>
             <hr />
             <button className="absolute top-0 right-2 p-2" onClick={() => setOpen(false)}>
