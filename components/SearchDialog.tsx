@@ -148,9 +148,9 @@ export function SearchDialog() {
                   hover:bg-slate-100 dark:hover:bg-gray-600
                   rounded border border-slate-200 dark:border-slate-600
                   transition-colors"
-                  onClick={(_) => setQuery('Tell me about patent 2021123456a')}
+                  onClick={(_) => setQuery('What is patent 2021123456a')}
                 >
-                 Tell me about patent 2021123456a
+                 What is patent 2021123456a
                 </button>
               </div>
             </div>
