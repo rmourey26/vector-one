@@ -79,8 +79,7 @@ export function SearchDialog() {
           <DialogHeader>
             <DialogTitle>PatentAI-0724 Text Embedding App </DialogTitle>
             <DialogDescription>
-             Augment ChatGPT&lsquo;s knowledge with your own data and without any code.  
-            </DialogDescription>
+             Augment ChatGPT&lsquo;s knowledge with your own data and without any code.</DialogDescription>
             <hr />
             <button className="absolute top-0 right-2 p-2" onClick={() => setOpen(false)}>
               <X className="h-4 w-4 dark:text-gray-100" />
@@ -149,9 +148,7 @@ export function SearchDialog() {
                   rounded border border-slate-200 dark:border-slate-600
                   transition-colors"
                   onClick={(_) => setQuery('Tell me about patent 2021123456a')}
-                >
-                 Tell me about patent 2021123456a
-                </button>
+                >Tell me about patent 2021123456a</button>
               </div>
             </div>
             <DialogFooter>
