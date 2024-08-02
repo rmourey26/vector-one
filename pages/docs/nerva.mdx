@@ -1,0 +1,1962 @@
+> **Nerva: a Truly Sparse Implementation of Neural Networks**
+
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th colspan="3"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td rowspan="3"><blockquote>
+<p>arXiv:2407.17437v1 [cs.LG] 24 Jul 2024</p>
+</blockquote></td>
+<td colspan="2"><blockquote>
+<p><strong>Wieger Wesselink</strong>1<strong>, Bram
+Grooten</strong>1<strong>, Qiao Xiao</strong>1<strong>, Cassio de
+Campos</strong>1<strong>, Mykola Pechenizkiy</strong>1 1Eindhoven
+University of Technology<br />
+Eindhoven, The Netherlands<br />
+{j.w.wesselink, b.j.grooten, q.xiao, c.decampos,
+m.pechenizkiy}@tue.nl</p>
+</blockquote>
+<p><strong>Abstract</strong></p>
+<blockquote>
+<p>We introduce Nerva, a fast neural network library under development
+in C++. It supports sparsity by using the sparse matrix operations of
+Intel’s Math Kernel Library (MKL), which eliminates the need for binary
+masks. We show that Nerva significantly decreases training time and
+memory usage while reaching equivalent accuracy to PyTorch. We run
+static sparse experiments with an MLP on CIFAR-10. On high sparsity
+levels like 99%, the runtime is reduced by a factor of
+<strong>4<em>×</em></strong> compared to a PyTorch model using masks.
+Similar to other popular frameworks such as PyTorch and Keras, Nerva
+offers a Python interface for users to work with.</p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td><strong>1</strong></td>
+<td><blockquote>
+<p><strong>Introduction</strong></p>
+</blockquote></td>
+</tr>
+<tr class="odd">
+<td colspan="2"><blockquote>
+<p>Deep learning models have shown impressive results across several
+fields of science (Brown et al., 2020; Fawzi et al., 2022; Jumper et
+al., 2021). However, these neural networks often come with the drawback
+of having a very large number of parameters, requiring extensive compute
+power to train or even test them. To overcome this, researchers have
+used compression methods to reduce the model size while maintaining
+performance (Han et al., 2015; Cheng et al., 2017).</p>
+<p>One such compression technique is pruning, where a portion of the
+weights are removed at the end of the training based on some
+pre-determined criterion (LeCun et al., 1989; Hassibi et al., 1993; Han
+et al., 2015). This has led to research into methods for identifying and
+training sparse networks from the start (Frankle and Carbin, 2019; Lee
+et al., 2019; Wang et al., 2020; Zhou et al., 2019; Ramanujan et al.,
+2020; Sreenivasan et al., 2022). Further, sparse training methods that
+adjust the network’s topology during training have proven to work well
+(Mocanu et al., 2018; Bellec et al., 2018; Dettmers and Zettlemoyer,
+2019; Evci et al., 2020).</p>
+</blockquote></td>
+</tr>
+</tbody>
+</table>
+
+> Most of this algorithmic research work is performed with binary masks
+> on top of the weight matrices. The masks enforce sparsity, but the
+> zeroed weights are often still saved in memory and passed in
+> computations. To take full advantage of the sparse algorithms, the
+> sparse neural networks (SNN) community requires truly sparse
+> implementations that show a genuine reduction in compute and memory
+> used.
+>
+> To solve this issue, we introduce Nerva: a fast neural network library
+> which uses sparse matrix operations, see. It is written in C++, but
+> also has a straight-forward PythoWe empirically show that the runtime
+> of Nerva decreases linearly with the model’s sparsity level. This is
+> an advantage over the default method used by many researchers (i.e.,
+> binary masks), which roughly has a constant running time for any
+> sparsity level.
+>
+> Accepted at the ICLR 2023 Workshop on Sparsity in Neural Networks
+
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th><blockquote>
+<p><strong>2</strong><br />
+<strong>2.1</strong></p>
+</blockquote></th>
+<th><blockquote>
+<p><strong>Related Work</strong><br />
+<strong>Sparse Training</strong></p>
+</blockquote></th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+
+> Sparse training has demonstrated the potential to train efficient
+> networks with sparse connections that match or even outperform their
+> dense counterparts with lower computational costs (Mocanu et al.,
+> 2018; Evci et al., 2020). Starting with Mocanu et al. (2016), it has
+> been shown that initiating a static sparse network without changing
+> its topology during training can also produce comparable performance
+> (Lee et al., 2019; Wang et al., 2020). Dynamic Sparse Training, also
+> known as sparse training with dynamic sparsity, is a newer training
+> paradigm that jointly optimizes sparse topology and weights during the
+> training process, starting from a sparse network (Mocanu et al., 2018;
+> Evci et al., 2020; Yuan et al., 2021). However, most sparse training
+> methods in the literature do not take full advantage of the memory and
+> computational benefits of sparse neural networks and can only achieve
+> theoretical acceleration. This is because they use a binary mask over
+> the connections and depend on dense matrix operations, resulting from
+> the lack of hardware support for sparsity.
+>
+> **2.2** **Truly Sparse Implementations**
+>
+> To solve the issue of obtaining genuine acceleration in training and
+> inference through sparsity, we need implementations that take
+> advantage of sparse matrix operations. There are some works that have
+> attempted to implement sparse training in a way that truly saves
+> memory and compute (Mocanu et al., 2018; Curci et al., 2021; Gale et
+> al., 2020; Elsen et al., 2020). For example, the implementation of
+> sparse neural networks with XNNPACK (Elsen et al., 2020) library has
+> shown significant speedups over dense models on smartphone processors.
+> Further, as demonstrated by Liu et al. (2021), sparse training
+> implementations in Cython can effectively conserve memory, enabling
+> the deployment of networks with up to one million neurons on a single
+> laptop. Another work worth mentioning is DLL (Wicht et al., 2018)
+> which implemented a fast deep learning library in C++. However, DLL
+> does not support sparsity and neither does it have a Python interface,
+> two vital advantages of Nerva. Lastly, the NVIDIA team is working on
+> hardware that supports sparsity (Zhou et al., 2020; Hubara et al.,
+> 2021). In this case usage is quite limited, as it only offers
+> performance benefits for networks with a specific N:M sparsity pattern
+> and is restricted to specific device support. In Nerva, we aim to
+> improve upon the existing implementations by programming directly in
+> C++, and sidestepping the Python to C conversion.
+>
+> **3** **Background**
+>
+> In sparse neural networks the goal is to obtain models with as few
+> parameters as possible, while still achieving good performance. The
+> fraction of weights that is removed in comparison to a dense model is
+> given by the global sparsity level *s*, which is the opposite of
+> density *d*
+
+<table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th colspan="5"><blockquote>
+<p><em>s</em> = 1 <em>−d</em><br />
+such that a density of 0<em>.</em>01 corresponds to a sparsity of
+0<em>.</em>99 (or 99%). The density <em>dl</em>of layer <em>l</em>
+is</p>
+<p>given by</p>
+<p><em>dl</em>= <em>Wl</em> 0</p>
+</blockquote>
+<p><em>nl in· nl out</em></p>
+<p>where <em>∥·∥</em>0 is the L0-norm, counting the number of non-zero
+entries in the sparse weight matrix <em>Wl</em>. The number of neurons
+coming in and going out of layer <em>l</em> are given by <em>nl
+in</em>and <em>nl out</em>respectively.</p>
+<blockquote>
+<p>The global density <em>d</em> of the model is given by</p>
+</blockquote></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td colspan="2" rowspan="3"><em>d</em> =</td>
+<td><em>L</em></td>
+<td rowspan="2"><em>Wl</em></td>
+<td rowspan="2"><blockquote>
+<p>0</p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td><em>l</em>=1</td>
+</tr>
+<tr class="odd">
+<td colspan="3"><blockquote>
+<p><em>L</em><br />
+<em>l</em>=1<em>nl innl out</em></p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td colspan="5"><blockquote>
+<p>where <em>L</em> is the total number of layers. Note that we do not
+sparsify the biases of each layer, as is often done in the
+literature.</p>
+</blockquote></td>
+</tr>
+<tr class="odd">
+<td><strong>4</strong></td>
+<td colspan="4"><blockquote>
+<p><strong>Implementation</strong></p>
+</blockquote></td>
+</tr>
+</tbody>
+</table>
+
+> The Nerva library, written in C++, is a neural network library that
+> aims to provide native support for sparse neural networks. It includes
+> features such as multilayer perceptions (MLPs), sparse and dense
+>
+> Accepted at the ICLR 2023 Workshop on Sparsity in Neural Networks
+>
+> layers, batch normalization, stochastic gradient descent, momentum,
+> dropout, and commonly used activation and loss functions. The
+> development of Nerva is a work in progress, more features will be
+> added in the future.
+>
+> Important criteria for the design of Nerva are the following:
+>
+> • Runtime efficiency: the implementation is done in C++.
+>
+> • Memory efficiency: the memory footprint is minimized by using truly
+> sparse layers (i.e. we do not use masking).
+>
+> • Energy efficiency: the implementation is optimized for CPU, although
+> we plan to support GPU as well.
+>
+> • Accessibility: a Python interface is provided just as in other
+> frameworks like PyTorch and Keras.
+>
+> • Open design: Nerva is open source, and the implementation is
+> accompanied by precise specifications in pseudocode.
+>
+> The Eigen1library is used for dense matrices, as it offers efficient
+> code for complex matrix expressions. Additionally, the Intel Math
+> Kernel Library (MKL)2is utilized to improve computation speed on the
+> CPU through parallelism and processor capabilities such as
+> vectorization. Although Eigen has a sparse matrix type, the
+> performance was not sufficient in our experiments, so the compressed
+> sparse row (CSR) matrix type of the MKL library is used instead.
+> Python bindings are implemented using Pybind113. The following
+> operations on sparse matrices are essential for a fast performance:
+>
+> *A* = *SB* feedforward
+>
+> *A* = *S⊤B* backprop
+>
+> *S* = *AB⊤* backprop
+>
+> *S* = *αS* + *βT,* momentum
+>
+> where *A* and *B* are dense matrices, *S* and *T* are sparse matrices,
+> and *α* and *β* are real numbers. Dense matrices are typically:
+> batches of input and output (or gradients thereof), while sparse
+> matrices often represent the weights or their gradients.
+>
+> Efficient implementations for the first two operations exist in MKL.
+> The third operation is unique in that we only need to compute the
+> values for the non-zero entries of the left-hand side. A few
+> strategies are implemented to avoid storing the result of the dense
+> product on the right-hand side entirely in memory. Interestingly, the
+> last operation is not efficiently supported in MKL for the case where
+> S and T have the same non-zero entries. We have made an alternative
+> implementation that operates directly on raw data.
+>
+> In Listing 1 an example of the Nerva Python interface is given, which
+> should look familiar to users of Keras. More code is shown in Listing
+> 2 of Appendix B, which contains a possible implementation of
+> stochastic gradient descent (SGD).
+>
+> **5** **Experiments**
+>
+> In this section, we present our experiments comparing Nerva to the
+> popular deep learning framework PyTorch. First we go into our
+> experimental setup, after which we present and interpret the results.
+> Additional graphs are shown in Appendix C.
+>
+> 1See  
+> 2See3See
+>
+> Accepted at the ICLR 2023 Workshop on Sparsity in Neural Networks
+>
+> 1 dataset = load_cifar10()  
+> 2 loss = SoftmaxCrossEntropyLoss()  
+> 3 learning_rate_scheduler = ConstantScheduler(0.01) 4
+> manual_seed(1234567)  
+> 5 density = 0.05
+>
+> 6
+>
+> 7 model = Sequential()  
+> 8 model.add(BatchNormalization())  
+> 9 model.add(Sparse(1000, density, ReLU(), GradientDescent(),
+> Xavier())) 10 model.add(Dense(128, ReLU(), Momentum(0.9), Xavier()))  
+> 11 model.add(Dense(64, ReLU(), GradientDescent(), Xavier()))  
+> 12 model.add(Dropout(0.3))  
+> 13 model.add(Dense(10, NoActivation(), GradientDescent(), Xavier()))
+>
+> 14  
+> 15 model.**compile**(input_size=3072, batch_size=100)  
+> 16 stochastic_gradient_descent(model, dataset, loss,
+> learning_rate_scheduler,
+>
+> 17 epochs=10, batch_size=100, shuffle=True)
+>
+> Listing 1: An example of training a model using the Nerva Python
+> interface. See Listing 2 in Appendix B for an implementation of the
+> stochastic_gradient_descent function.
+>
+> **5.1** **Experimental setup**
+
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th colspan="4"><blockquote>
+<p>We train on the CIFAR-10 dataset (Krizhevsky et al., 2009), us-</p>
+</blockquote></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><blockquote>
+<p>ing a standard multilayer perception (MLP) model with layer sizes
+[3072<em>,</em> 1024<em>,</em> 512<em>,</em> 10] and ReLU activations.
+The weights are ini-tialized with Xavier (Glorot and Bengio, 2010). We
+augment the</p>
+</blockquote></td>
+<td colspan="3"><blockquote>
+<p>Table 1: Initial learning rates in our experiments.</p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td colspan="2">data in a standard manner often used in the literature.
+We use a</td>
+<td rowspan="2">Density</td>
+<td rowspan="2"><blockquote>
+<p>Learning rate</p>
+</blockquote></td>
+</tr>
+<tr class="odd">
+<td colspan="2" rowspan="3"><blockquote>
+<p>batch size of 100 and the SGD optimizer with momentum= 0<em>.</em>9,
+Nesterov= True, and no weight decay. The learning rate starts at</p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td>1</td>
+<td><blockquote>
+<p>0<em>.</em>01</p>
+</blockquote></td>
+</tr>
+<tr class="odd">
+<td rowspan="2">0<em>.</em>5</td>
+<td rowspan="2"><blockquote>
+<p>0<em>.</em>01</p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td colspan="2" rowspan="2">a value which depends on the sparsity level
+(see Table 1) and is</td>
+</tr>
+<tr class="odd">
+<td rowspan="2">0<em>.</em>2</td>
+<td rowspan="2"><blockquote>
+<p>0<em>.</em>01</p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td colspan="2" rowspan="2"><blockquote>
+<p>decayed twice during training: after 50% and 75% of the epochs.</p>
+</blockquote></td>
+</tr>
+<tr class="odd">
+<td rowspan="2">0<em>.</em>1</td>
+<td rowspan="2"><blockquote>
+<p>0<em>.</em>03</p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td colspan="2" rowspan="2"><blockquote>
+<p>We use a decay factor of 0<em>.</em>1 and train for 100 epochs.</p>
+</blockquote></td>
+</tr>
+<tr class="odd">
+<td rowspan="2">0<em>.</em>05</td>
+<td rowspan="2"><blockquote>
+<p>0<em>.</em>03</p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td colspan="2" rowspan="2">We run on multiple sparsity levels, from 50%
+up to 99<em>.</em>9% sparsity,</td>
+</tr>
+<tr class="odd">
+<td rowspan="2">0<em>.</em>01</td>
+<td rowspan="2"><blockquote>
+<p>0<em>.</em>1</p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td colspan="2" rowspan="2">and also compare the performance of the
+fully dense model. The</td>
+</tr>
+<tr class="odd">
+<td rowspan="2">0<em>.</em>005</td>
+<td rowspan="2"><blockquote>
+<p>0<em>.</em>1</p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td colspan="2" rowspan="2"><blockquote>
+<p>exact global densities used are shown in Table 1. We distribute the
+sparsity levels over the layers according to the Erd˝os-Rényi</p>
+</blockquote></td>
+</tr>
+<tr class="odd">
+<td>0<em>.</em>001</td>
+<td><blockquote>
+<p>0<em>.</em>1</p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td colspan="4"><blockquote>
+<p>(ER) initialization scheme from Mocanu et al. (2018), which
+applies<br />
+higher sparsity levels to larger layers. For instance, for a sparsity
+level of 99%, the density of each layer is as follows:
+[0<em>.</em>008<em>,</em> 0<em>.</em>018<em>,</em> 0<em>.</em>6]. The
+last layer, which is the smallest, receives the lowest sparsity of
+1<em>−</em>0<em>.</em>6 = 40%. When the network used in our experiments
+is fully dense, it has 3<em>,</em> 676<em>,</em> 682 parameters. At a
+sparsity level of 99<em>.</em>9% this drops down to 5<em>,</em> 221
+parameters.</p>
+</blockquote></td>
+</tr>
+</tbody>
+</table>
+
+> We compare our new Nerva framework with PyTorch. Nerva uses sparse
+> matrix operations, while for PyTorch we apply binary masks, a
+> technique often employed in the sparsity literature. We aim for a
+> completely fair comparison between the frameworks. Thus, we attempt to
+> ensure that all the implementation details have exactly the same
+> settings in both frameworks. All experiments are run on the same
+> desktop, see Appendix A for its specifications. We run 3 random seeds
+> for each choice of framework and density level.
+
+<img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image1.png"
+style="width:3.41667in;height:2.56944in" />
+
+> Accepted at the ICLR 2023 Workshop on Sparsity in Neural Networks
+
+Accuracy vs Sparsity
+
+> 0.6
+>
+> 0.5
+
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Best test accuracy</th>
+<th><blockquote>
+<p>0.4<br />
+0.3</p>
+</blockquote></th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+
+> 0.2
+
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>0.1</th>
+<th rowspan="3">0.5</th>
+<th rowspan="2"><blockquote>
+<p>Nerva<br />
+Nerva dense<br />
+PyT orch<br />
+PyT orch dense</p>
+</blockquote></th>
+<th rowspan="3">0.9</th>
+<th rowspan="3"><blockquote>
+<p>0.95<br />
+Sparsity</p>
+</blockquote></th>
+<th rowspan="3"><blockquote>
+<p>0.99 0.995</p>
+</blockquote></th>
+<th rowspan="3"><blockquote>
+<p>0.999</p>
+</blockquote></th>
+</tr>
+<tr class="odd">
+<th rowspan="2">0.0</th>
+</tr>
+<tr class="header">
+<th>0.8</th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+
+> Figure 1: Accuracy vs sparsity. Notice the logit-scale on the
+> horizontal axis, values closer to 1 are stretched out. The accuracy of
+> Nerva and PyTorch are similar, except for the high sparsity regime
+> where Nerva outperforms PyTorch. The reason for this is yet unknown.
+>
+> **5.2** **Equivalent accuracy**
+>
+> We measure the training and test accuracy over time. In Figure 1 we
+> report the best test accuracy over the entire training run, and plot
+> it against the various global sparsity levels that we used. We used 3
+> random seeds for each setting, and show the averages with a 95%
+> confidence interval. The horizontal axis of Figure 1 has a
+> logit-scale4to improve the visibility of high sparsity levels.
+>
+> The accuracy of Nerva and PyTorch is very similar, which is what we
+> aimed for. The only exception is the higher sparsity levels, where
+> Nerva seems to outperform PyTorch. We are unsure if this is due to an
+> advantage of truly sparse training, or whether it comes from a tiny
+> discrepancy in implementation details we might have missed.
+>
+> **5.3** **Decreased training time**
+>
+> For each epoch we measure how much time it took to perform all the
+> necessary (sparse) operations. We exclude the time needed for loading
+> and augmenting the data. We sum the times of all 100 epochs together,
+> which is what Figure 2 shows.
+>
+> As expected, the running time for PyTorch stays approximately constant
+> (independent of the sparsity level) as this implementation uses binary
+> masks. It needs to multiply all weights of each matrix, whether it is
+> sparse or not. On the contrary, Nerva shows its true advantage here.
+> As the sparsity level goes up, the running time decreases linearly.
+> Less multiplications are necessary, and this drop in total FLOPs is
+> reflected in a considerable reduction in running time.
+>
+> **5.4** **Decreased inference time**
+>
+> We measure the inference time needed for one example of CIFAR-10. The
+> computation is done with batch size 1. In Figure 3 we plot the
+> inference time against the various global sparsity levels that we
+> used. We used 3 random seeds for each setting, and show the averages
+> with a 95% confidence interval. As in the previous sections we use a
+> logit-scale to improve the visibility of high sparsity levels.
+>
+> 4The logit function is logit(*s*) = log(*s/*(1 *−s*)). See the for
+> details.
+
+<img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image2.png"
+style="width:3.36111in;height:2.52778in" />
+
+> Accepted at the ICLR 2023 Workshop on Sparsity in Neural Networks
+
+Time vs Sparsity
+
+> 20.0
+>
+> 17.5
+
+<table>
+<colgroup>
+<col style="width: 9%" />
+<col style="width: 9%" />
+<col style="width: 9%" />
+<col style="width: 9%" />
+<col style="width: 9%" />
+<col style="width: 9%" />
+<col style="width: 9%" />
+<col style="width: 9%" />
+<col style="width: 9%" />
+<col style="width: 9%" />
+<col style="width: 9%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th rowspan="8">Training time (minutes)</th>
+<th>15.0</th>
+<th rowspan="8">0.800</th>
+<th colspan="2" rowspan="7"><blockquote>
+<p>Nerva<br />
+Nerva dense<br />
+PyT orch<br />
+PyT orch dense</p>
+</blockquote></th>
+<th rowspan="8">0.875</th>
+<th rowspan="8">0.900<br />
+Sparsity</th>
+<th rowspan="8">0.925</th>
+<th rowspan="8">0.950</th>
+<th rowspan="8">0.975</th>
+<th rowspan="8"><blockquote>
+<p>1.000</p>
+</blockquote></th>
+</tr>
+<tr class="odd">
+<th>12.5</th>
+</tr>
+<tr class="header">
+<th>10.0</th>
+</tr>
+<tr class="odd">
+<th>7.5</th>
+</tr>
+<tr class="header">
+<th>5.0</th>
+</tr>
+<tr class="odd">
+<th>2.5</th>
+</tr>
+<tr class="header">
+<th rowspan="2">0.0</th>
+</tr>
+<tr class="odd">
+<th>0.825</th>
+<th>0.850</th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+
+> Figure 2: The total training time of 100 epochs for CIFAR-10, on a
+> regular desktop with 4 CPU cores. As the sparsity level increases, the
+> running time of Nerva goes down linearly, as it takes advantage of
+> sparse matrix operations. The running time for PyTorch stays roughly
+> constant, because it uses binary masks.
+>
+> The inference time that we measured for Nerva is significantly lower
+> than for PyTorch, with the exception of the very low sparsity levels.
+> As expected, for higher sparsity levels the inference time decreases
+> significantly.
+>
+> **5.5** **Scalability**
+>
+> To measure the scalability of our sparse neural network solution, we
+> did a few experiments that should give an indication of the running
+> time for larger models. Table 2, left shows the training times of one
+> epoch for CIFAR-10 using a sparse model with density 0*.*01 and a
+> varying number of hidden layers of size 1024. Overall the Nerva model
+> runs about 4*×* faster, and the runtime scales linearly in the number
+> of hidden layers. Table 2, right shows the runtime in the case of
+> three equally sized hidden layers, with sizes ranging from 1024 to
+> 32*,* 768. Again in all cases Nerva is faster. However, the factor
+> between Nerva and PyTorch drops from 4*×* to 1*.*5*×* for the large
+> matrices. This is because the dense matrix multiplication routines of
+> the MKL library happen to scale much better for large matrices than
+> their sparse equivalents. Note that for size 32*,* 768 the PyTorch
+> model ran out of memory (i.e., over 32GB), while the Nerva model was
+> still only using around 2GB.
+>
+> **5.6** **Memory**
+>
+> To estimate the memory consumption of the Nerva sparse models, we
+> store the weights as NumPy tensors in .npy format. For dense layers,
+> we save one tensor containing the weight values. The weight values of
+> sparse layers are stored in CSR format, which means that for each
+> non-zero entry, two additional integers are saved: a row and column
+> index. Hence for sparse layers, we store a vector containing the
+> non-zero values and two vectors containing the column and row indices.
+> We applied this storage scheme to a CIFAR-10 model with hidden layers
+> sizes 1024 and 512. The disk sizes for multiple densities are shown in
+> Table 3. The difference between these sizes should be a rough
+> indicator of the memory requirements of these models. In particular,
+> for a sparse model with density 0*.*01 a 49*×* reduction is achieved
+> compared to the fully dense model.
+
+<img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image3.png"
+style="width:3.41667in;height:2.56944in" />
+
+> Accepted at the ICLR 2023 Workshop on Sparsity in Neural Networks
+
+Inference time vs Sparsity
+
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th rowspan="3"><blockquote>
+<p>Inference time (ms)</p>
+</blockquote></th>
+<th><blockquote>
+<p>2.0</p>
+</blockquote></th>
+<th rowspan="3"><p>Nerva</p>
+<p>PyT orch</p>
+<p>Nerva dense</p>
+<p>PyT orch dense</p></th>
+</tr>
+<tr class="odd">
+<th><blockquote>
+<p>1.5</p>
+</blockquote></th>
+</tr>
+<tr class="header">
+<th><blockquote>
+<p>1.0</p>
+</blockquote></th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+
+> 0.5
+
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>0.0</th>
+<th><blockquote>
+<p>0.5</p>
+</blockquote></th>
+<th>0.8</th>
+<th>0.9</th>
+<th><blockquote>
+<p>0.95<br />
+Sparsity</p>
+</blockquote></th>
+<th><blockquote>
+<p>0.99 0.995</p>
+</blockquote></th>
+<th><blockquote>
+<p>0.999</p>
+</blockquote></th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+
+> Figure 3: Inference time vs sparsity. The graph shows the average
+> inference time of 1 example of CIFAR-10 in milliseconds, on a regular
+> desktop with 4 CPU cores. Like in figure 1 a logit-scale is used. The
+> inference time of Nerva is significantly lower, especially for higher
+> sparsity levels.
+>
+> Table 2: The running times in seconds of 1 epoch for CIFAR-10 using
+> sparse models with density 0.01. On the **left** we increase the depth
+> (*N*), showing results for *N* hidden layers of size 1024, where *N*
+> ranges from 1 to 10. On the **right** we adjust the width (*M*),
+> comparing results for three hidden layers of size *M*, with *M*
+> ranging from 1024 to 32768 (where PyTorch runs out of memory).
+
+| depth | Nerva | PyTorch | factor |
+|-------|-------|---------|--------|
+
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>1</th>
+<th><blockquote>
+<p>2.37</p>
+</blockquote></th>
+<th>10.53</th>
+<th rowspan="10"><blockquote>
+<p>4.44<em>×</em>4.23<em>×</em>4.19<em>×</em>4.32<em>×</em>4.20<em>×</em>4.20<em>×</em>4.21<em>×</em>4.15<em>×</em>4.16<em>×</em>4.13<em>×</em></p>
+</blockquote></th>
+</tr>
+<tr class="odd">
+<th>2</th>
+<th><blockquote>
+<p>3.29</p>
+</blockquote></th>
+<th>13.92</th>
+</tr>
+<tr class="header">
+<th>3</th>
+<th><blockquote>
+<p>4.20</p>
+</blockquote></th>
+<th>17.58</th>
+</tr>
+<tr class="odd">
+<th>4</th>
+<th><blockquote>
+<p>5.08</p>
+</blockquote></th>
+<th>21.94</th>
+</tr>
+<tr class="header">
+<th>5</th>
+<th><blockquote>
+<p>5.95</p>
+</blockquote></th>
+<th>24.99</th>
+</tr>
+<tr class="odd">
+<th>6</th>
+<th><blockquote>
+<p>6.89</p>
+</blockquote></th>
+<th>28.90</th>
+</tr>
+<tr class="header">
+<th>7</th>
+<th><blockquote>
+<p>7.79</p>
+</blockquote></th>
+<th>32.78</th>
+</tr>
+<tr class="odd">
+<th>8</th>
+<th><blockquote>
+<p>8.71</p>
+</blockquote></th>
+<th>36.19</th>
+</tr>
+<tr class="header">
+<th>9</th>
+<th><blockquote>
+<p>9.56</p>
+</blockquote></th>
+<th>39.75</th>
+</tr>
+<tr class="odd">
+<th>10</th>
+<th>10.45</th>
+<th>43.11</th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>width</th>
+<th>Nerva</th>
+<th>PyTorch</th>
+<th>factor</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1024</td>
+<td>4.20</td>
+<td>17.58</td>
+<td rowspan="6"><blockquote>
+<p>4.19<em>×</em>4.70<em>×</em>3.87<em>×</em>3.54<em>×</em>1.52<em>×</em>-</p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td>2048</td>
+<td>10.23</td>
+<td>48.06</td>
+</tr>
+<tr class="odd">
+<td>4096</td>
+<td>35.53</td>
+<td>137.54</td>
+</tr>
+<tr class="even">
+<td>8192</td>
+<td>128.87</td>
+<td>456.12</td>
+</tr>
+<tr class="odd">
+<td>16384</td>
+<td>1100.56</td>
+<td>1669.90</td>
+</tr>
+<tr class="even">
+<td>32768</td>
+<td>4466.92</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+
+> Table 3: The memory required by Nerva to save the MLP model (layers:
+> 3072-1024-512-10) used in our experiments.
+
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Density</th>
+<th>Memory size</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><blockquote>
+<p>1<br />
+0.1<br />
+0.01<br />
+0.001</p>
+</blockquote></td>
+<td><blockquote>
+<p>15MB<br />
+2.8MB<br />
+295KB<br />
+37KB</p>
+</blockquote></td>
+</tr>
+</tbody>
+</table>
+
+> Accepted at the ICLR 2023 Workshop on Sparsity in Neural Networks
+
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th><blockquote>
+<p><strong>6</strong></p>
+</blockquote></th>
+<th><blockquote>
+<p><strong>Discussion and Conclusion</strong></p>
+</blockquote></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td colspan="2"><p>We present a new library, Nerva, for fast
+computations in sparse neural networks (SNN). From the results we see
+that under certain sparsity levels, i.e., above <em>∼</em>80%, Nerva
+outperforms PyTorch in running time, while achieving equivalent
+accuracy. This particular threshold (sparsity level 0<em>.</em>8) where
+Nerva surpasses PyTorch in efficiency is dependent on the size of the
+model and the datasets trained on. This is a promising case for sparsity
+in the light of today’s scaling laws, because in our preliminary
+experiments we see that <em>the larger the model, the lower the sparsity
+level needed</em> for Nerva to beat PyTorch in efficiency.</p>
+<p><strong>Limitations &amp; Future Work</strong> The presented
+experiments on sparse networks all use a static sparse topology
+structure. We will add functionality for Dynamic Sparse Training to
+Nerva and intend to report on its results in the future. Note that our
+experiments in this work are all run on CPUs. We plan to report further
+on GPU results in the near future. At this moment it is an open question
+whether a sparse GPU implementation (based on MKL) is able to compete
+with a dense GPU implementation. We will open-source our Nerva
+implementation on GitHub and encourage everyone to contribute. We hope
+to motivate the SNN community to work on increasing the true efficiency
+of our sparse algorithms.</p></td>
+</tr>
+</tbody>
+</table>
+
+> Accepted at the ICLR 2023 Workshop on Sparsity in Neural Networks
+>
+> **References**
+>
+> Bellec, G., Kappel, D., Maass, W., and Legenstein, R. (2018). Deep
+> Rewiring: Training very sparse deep networks. *International
+> Conference on Learning Representations*. URL:. (Cited in Section 1)
+>
+> Brown, T., Mann, B., Ryder, N., Subbiah, M., Kaplan, J. D., Dhariwal,
+> P., Neelakantan, A., Shyam, P., Sastry, G., Askell, A., et al. (2020).
+> Language Models are Few-Shot Learners. *Advances in Neural Information
+> Processing Systems*, 33:1877–1901. URL:.
+>
+> (Cited in Section 1)
+>
+> Cheng, Y., Wang, D., Zhou, P., and Zhang, T. (2017). A Survey of Model
+> Compression and Acceleration for Deep Neural Networks. *IEEE Signal
+> Processing Magazine*. URL:. (Cited in Section 1)
+>
+> Curci, S., Mocanu, D. C., and Pechenizkiyi, M. (2021). Truly Sparse
+> Neural Networks at Scale. *arXiv preprint arXiv:2102.01732*. URL:.
+> (Cited in Section 2.2)
+>
+> Dettmers, T. and Zettlemoyer, L. (2019). Sparse Networks from Scratch:
+> Faster Training without Losing Performance. *arXiv preprint
+> arXiv:1907.04840*. URL:.
+>
+> . (Cited in Section 1)
+>
+> Elsen, E., Dukhan, M., Gale, T., and Simonyan, K. (2020). Fast Sparse
+> ConvNets. In *Proceedings of the IEEE/CVF conference on computer
+> vision and pattern recognition*, pages 14629–14638. URL: . (Cited in
+> Section 2.2)
+>
+> Evci, U., Gale, T., Menick, J., Castro, P. S., and Elsen, E. (2020).
+> Rigging the Lottery: Making All Tickets Winners. In *International
+> Conference on Machine Learning*, pages 2943–2952. PMLR.
+>
+> URL:. (Cited in Section 1, 2.1)
+>
+> Fawzi, A., Balog, M., Huang, A., Hubert, T., Romera-Paredes, B.,
+> Barekatain, M., Novikov, A., R Ruiz, F. J., Schrittwieser, J.,
+> Swirszcz, G., et al. (2022). Discovering faster matrix multiplication
+> algorithms with reinforcement learning. *Nature*, 610(7930):47–53.
+> URL:.
+>
+> . (Cited in Section 1)
+>
+> Frankle, J. and Carbin, M. (2019). The Lottery Ticket Hypothesis:
+> Finding Sparse, Trainable Neural Networks. *International Conference
+> on Learning Representations*. URL:. (Cited in Section 1)
+>
+> Gale, T., Zaharia, M., Young, C., and Elsen, E. (2020). Sparse GPU
+> Kernels for Deep Learning. In *SC20: International Conference for High
+> Performance Computing, Networking, Storage and Analysis*, pages 1–14.
+> IEEE. URL:. (Cited in Section 2.2)
+>
+> Glorot, X. and Bengio, Y. (2010). Understanding the difficulty of
+> training deep feedforward neural networks. In Teh, Y. W. and
+> Titterington, M., editors, *Proceedings of the Thirteenth
+> International Conference on Artificial Intelligence and Statistics*,
+> volume 9, pages 249–256. PMLR. URL: . (Cited in Section 5.1)
+>
+> Han, S., Pool, J., Tran, J., and Dally, W. (2015). Learning both
+> Weights and Connections for Efficient Neural Networks. *Advances in
+> Neural Information Processing Systems*, 28. URL: . (Cited in Section
+> 1)
+>
+> Hassibi, B., Stork, D. G., and Wolff, G. J. (1993). Optimal Brain
+> Surgeon and General Network Pruning. In *IEEE international conference
+> on neural networks*, pages 293–299. IEEE. URL: . (Cited in Section 1)
+>
+> Hubara, I., Chmiel, B., Island, M., Banner, R., Naor, J., and Soudry,
+> D. (2021). Accelerated Sparse Neural Training: A Provable and
+> Efficient Method to Find N:M Transposable Masks. *Advances in Neural
+> Information Processing Systems*, 34:21099–21111. URL:. (Cited in
+> Section 2.2)
+>
+> Accepted at the ICLR 2023 Workshop on Sparsity in Neural Networks
+
+Jumper, J., Evans, R., Pritzel, A., Green, T., Figurnov, M.,
+Ronneberger, O., Tunyasuvunakool, K.,
+
+> Bates, R., Žídek, A., Potapenko, A., et al. (2021). Highly accurate
+> protein structure prediction with AlphaFold. *Nature*,
+> 596(7873):583–589. URL:. (Cited in Section 1)
+>
+> Krizhevsky, A., Hinton, G., et al. (2009). Learning Multiple Layers of
+> Features from Tiny Images. URL:. (Cited in Sec
+>
+> LeCun, Y., Denker, J., and Solla, S. (1989). Optimal Brain Damage.
+> *Advances in Neural Information Processing Systems*, 2. URL:
+>
+> Lee, N., Ajanthan, T., and Torr, P. (2019). SNIP: Single-shot Network
+> Pruning based on Connection Sensitivity. *International Conference on
+> Learning Representations*. URL:. (Cited in Section 1, 2.1)
+>
+> Liu, S., Mocanu, D. C., Matavalam, A. R. R., Pei, Y., and Pechenizkiy,
+> M. (2021). Sparse evolutionary deep learning with over one million
+> artificial neurons on commodity hardware. *Neural Computing and
+> Applications*, 33(7):2589–2604. URL:. (Cited in Section 2.2)
+>
+> Mocanu, D. C., Mocanu, E., Nguyen, P. H., Gibescu, M., and Liotta, A.
+> (2016). A Topological Insight into Restricted Boltzmann Machines.
+> *Machine Learning*, 104(2):243–270. URL:. (Cited in Section
+>
+> Mocanu, D. C., Mocanu, E., Stone, P., Nguyen, P. H., Gibescu, M., and
+> Liotta, A. (2018). Scalable Training of Artificial Neural Networks
+> with Adaptive Sparse Connectivity inspired by Network Science. *Nature
+> communications*, 9(1):1–12. URL:.
+>
+> (Cited in Section 1, 2.1, 2.2, 5.1)
+>
+> Ramanujan, V., Wortsman, M., Kembhavi, A., Farhadi, A., and Rastegari,
+> M. (2020). What’s Hidden in a Randomly Weighted Neural Network? In
+> *Conference on Computer Vision and Pattern* *Recognition*, pages
+> 11893–11902. URL:. (Cited in Section 1)
+>
+> Sreenivasan, K., Sohn, J.-y., Yang, L., Grinde, M., Nagle, A., Wang,
+> H., Lee, K., and Papailiopoulos, D. (2022). Rare Gems: Finding Lottery
+> Tickets at Initialization. *arXiv preprint arXiv:2202.12002*.
+>
+> URL:. (Cited in Section 1)
+>
+> Wang, C., Zhang, G., and Grosse, R. (2020). Picking Winning Tickets
+> Before Training by Preserving Gradient Flow. *International Conference
+> on Learning Representations*. URL:.
+>
+> . (Cited in Section 1, 2.1)
+>
+> Wicht, B., Hennebert, J., and Fischer, A. (2018). DLL: A Blazing Fast
+> Deep Neural Network Library. *arXiv preprint arXiv:1804.04512*. URL:.
+> (Cited in Section 2.2)
+>
+> Yuan, G., Ma, X., Niu, W., Li, Z., Kong, Z., Liu, N., Gong, Y., Zhan,
+> Z., He, C., Jin, Q., et al. (2021). MEST: Accurate and fast
+> memory-economic sparse training framework on the edge. *Advances in
+> Neural Information Processing Systems*, 34:20838–20850. URL:. (Cited
+> in Section 2.1)
+>
+> Zhou, A., Ma, Y., Zhu, J., Liu, J., Zhang, Z., Yuan, K., Sun, W., and
+> Li, H. (2020). Learning N:M Fine-grained Structured Sparse Neural
+> Networks From Scratch. *International Conference on Learning
+> Representations*. URL:. (Cited in Section 2.2)
+>
+> Zhou, H., Lan, J., Liu, R., and Yosinski, J. (2019). Deconstructing
+> Lottery Tickets: Zeros, Signs, and the Supermask. *Advances in Neural
+> Information Processing Systems*, 32. URL:. (Cited in Section 1)
+>
+> Accepted at the ICLR 2023 Workshop on Sparsity in Neural Networks
+>
+> **Appendix**
+>
+> **A Hardware specifications**
+>
+> We run all our experiments on the same machine for a fair comparison
+> of running times. We use a desktop with 4 CPU cores of the type Intel
+> Core i7-6700 @ 3.40Ghz. The machine has 32 GB of memory and runs a
+> Linux operating system. We have not used GPUs in our experiments, this
+> is reserved for future work.
+>
+> **B** **Code**
+>
+> In Listing 2 we show some more code which complements Listing 1 from
+> the main body.
+>
+> 1 **def** stochastic_gradient_descent(model, dataset, loss,
+> learning_rate,  
+> 2 epochs, batch_size, shuffle):  
+> 3 N = dataset.Xtrain.shape\[1\] \# the number of examples  
+> 4 I = list(range(N))  
+> 5  
+> K = N // batch_size \# the number of batches 6 **for** epoch **in**
+> range(epochs):  
+> 7 **if** shuffle: random.shuffle(I)  
+> 8 eta = learning_rate(epoch) \# update the lr at the start of each
+> epoch 9  
+> **for** k **in** range(K): 10 batch = I\[k ∗batch_size: (k + 1)
+> ∗batch_size\]  
+> 11 X = dataset.Xtrain\[:, batch\]  
+> 12 T = dataset.Ttrain\[:, batch\]  
+> 13  
+> Y = model.feedforward(X) 14 dY = loss.gradient(Y, T) / batch_size  
+> 15 model.backpropagate(Y, dY)  
+> 16 model.optimize(eta)
+
+Listing 2: An implementation of SGD using the Nerva Python interface.
+
+> **C Additional plots**
+>
+> We provide additional plots to the experiments.
+
+<img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image4.png"
+style="width:1.81944in;height:0.875in" /><img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image5.png"
+style="width:1.81944in;height:0.875in" /><img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image6.png"
+style="width:1.81944in;height:0.875in" /><img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image7.png"
+style="width:1.81944in;height:0.875in" /><img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image8.png"
+style="width:1.81944in;height:0.875in" /><img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image9.png"
+style="width:1.81944in;height:0.875in" /><img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image10.png"
+style="width:1.81944in;height:0.875in" /><img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image11.png"
+style="width:1.81944in;height:0.875in" />
+
+> Accepted at the ICLR 2023 Workshop on Sparsity in Neural Networks
+
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th rowspan="2"><blockquote>
+<p><strong>C.1</strong></p>
+</blockquote></th>
+<th colspan="2"><blockquote>
+<p><strong>Accuracy-vs-epoch</strong></p>
+</blockquote></th>
+<th rowspan="2"><blockquote>
+<p>Accuracy vs Epoch (Sparsity: 0.5) 0.8</p>
+</blockquote></th>
+</tr>
+<tr class="odd">
+<th>0.8</th>
+<th><blockquote>
+<p>Accuracy vs Epoch (dense)</p>
+</blockquote></th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+
+<table style="width:100%;">
+<colgroup>
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th rowspan="5">Accuracy</th>
+<th>0.6</th>
+<th rowspan="5">0</th>
+<th rowspan="5">20</th>
+<th colspan="3" rowspan="4"><blockquote>
+<p>Nerva train accuracy<br />
+Nerva test accuracy<br />
+PyT orch train accuracy<br />
+PyT orch test accuracy</p>
+</blockquote></th>
+<th rowspan="5">Accuracy</th>
+<th>0.6</th>
+<th rowspan="5">0</th>
+<th rowspan="5">20</th>
+<th colspan="3" rowspan="4"><blockquote>
+<p>Nerva train accuracy<br />
+Nerva test accuracy<br />
+PyT orch train accuracy<br />
+PyT orch test accuracy</p>
+</blockquote></th>
+</tr>
+<tr class="odd">
+<th>0.4</th>
+<th>0.4</th>
+</tr>
+<tr class="header">
+<th>0.2</th>
+<th>0.2</th>
+</tr>
+<tr class="odd">
+<th rowspan="2">0.0</th>
+<th rowspan="2">0.0</th>
+</tr>
+<tr class="header">
+<th><blockquote>
+<p>40 60</p>
+</blockquote>
+<p>Epoch</p></th>
+<th>80</th>
+<th><blockquote>
+<p>100</p>
+</blockquote></th>
+<th><blockquote>
+<p>40 60</p>
+</blockquote>
+<p>Epoch</p></th>
+<th>80</th>
+<th><blockquote>
+<p>100</p>
+</blockquote></th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+
+> Accuracy vs Epoch (Sparsity: 0.8) 0.8
+>
+> Accuracy vs Epoch (Sparsity: 0.9) 0.8
+
+<table style="width:100%;">
+<colgroup>
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th rowspan="5">Accuracy</th>
+<th>0.6</th>
+<th rowspan="5">0</th>
+<th rowspan="5">20</th>
+<th colspan="3" rowspan="4"><blockquote>
+<p>Nerva train accuracy<br />
+Nerva test accuracy<br />
+PyT orch train accuracy<br />
+PyT orch test accuracy</p>
+</blockquote></th>
+<th rowspan="5">Accuracy</th>
+<th>0.6</th>
+<th rowspan="5">0</th>
+<th rowspan="5">20</th>
+<th colspan="3" rowspan="4"><blockquote>
+<p>Nerva train accuracy<br />
+Nerva test accuracy<br />
+PyT orch train accuracy<br />
+PyT orch test accuracy</p>
+</blockquote></th>
+</tr>
+<tr class="odd">
+<th>0.4</th>
+<th>0.4</th>
+</tr>
+<tr class="header">
+<th>0.2</th>
+<th>0.2</th>
+</tr>
+<tr class="odd">
+<th rowspan="2">0.0</th>
+<th rowspan="2">0.0</th>
+</tr>
+<tr class="header">
+<th><blockquote>
+<p>40 60</p>
+</blockquote>
+<p>Epoch</p></th>
+<th>80</th>
+<th><blockquote>
+<p>100</p>
+</blockquote></th>
+<th><blockquote>
+<p>40 60</p>
+</blockquote>
+<p>Epoch</p></th>
+<th>80</th>
+<th><blockquote>
+<p>100</p>
+</blockquote></th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+
+> Accuracy vs Epoch (Sparsity: 0.95) 0.8
+>
+> Accuracy vs Epoch (Sparsity: 0.99) 0.8
+
+<table style="width:100%;">
+<colgroup>
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th rowspan="3">Accuracy</th>
+<th colspan="6"><blockquote>
+<p>0.6</p>
+</blockquote></th>
+<th rowspan="3">Accuracy</th>
+<th colspan="6"><blockquote>
+<p>0.6</p>
+</blockquote></th>
+</tr>
+<tr class="odd">
+<th>0.4</th>
+<th rowspan="4">0</th>
+<th rowspan="4">20</th>
+<th colspan="3" rowspan="3"><blockquote>
+<p>Nerva train accuracy<br />
+Nerva test accuracy<br />
+PyT orch train accuracy<br />
+PyT orch test accuracy</p>
+</blockquote></th>
+<th>0.4</th>
+<th rowspan="4">0</th>
+<th rowspan="4">20</th>
+<th colspan="3" rowspan="3"><blockquote>
+<p>Nerva train accuracy<br />
+Nerva test accuracy<br />
+PyT orch train accuracy<br />
+PyT orch test accuracy</p>
+</blockquote></th>
+</tr>
+<tr class="header">
+<th>0.2</th>
+<th>0.2</th>
+</tr>
+<tr class="odd">
+<th rowspan="8">Accuracy</th>
+<th rowspan="2">0.0</th>
+<th rowspan="8">Accuracy</th>
+<th rowspan="2">0.0</th>
+</tr>
+<tr class="header">
+<th><blockquote>
+<p>40 60</p>
+</blockquote>
+<p>Epoch</p></th>
+<th>80</th>
+<th><blockquote>
+<p>100</p>
+</blockquote></th>
+<th><blockquote>
+<p>40 60</p>
+</blockquote>
+<p>Epoch</p></th>
+<th>80</th>
+<th><blockquote>
+<p>100</p>
+</blockquote></th>
+</tr>
+<tr class="odd">
+<th colspan="6"><blockquote>
+<p>Accuracy vs Epoch (Sparsity: 0.995) 0.8</p>
+</blockquote></th>
+<th colspan="6" rowspan="3"><blockquote>
+<p>Accuracy vs Epoch (Sparsity: 0.999) 0.8 Nerva train accuracy<br />
+Nerva test accuracy<br />
+0.6 PyT orch train accuracy PyT<br />
+orch test accuracy 0.4</p>
+</blockquote></th>
+</tr>
+<tr class="header">
+<th colspan="6"><blockquote>
+<p>0.6</p>
+</blockquote></th>
+</tr>
+<tr class="odd">
+<th>0.4</th>
+<th rowspan="4">0</th>
+<th rowspan="4">20</th>
+<th colspan="3" rowspan="3"><blockquote>
+<p>Nerva train accuracy<br />
+Nerva test accuracy<br />
+PyT orch train accuracy<br />
+PyT orch test accuracy</p>
+</blockquote></th>
+</tr>
+<tr class="header">
+<th>0.2</th>
+<th colspan="6"><blockquote>
+<p>0.2</p>
+</blockquote></th>
+</tr>
+<tr class="odd">
+<th rowspan="2">0.0</th>
+<th rowspan="2">0.0</th>
+<th rowspan="2">0</th>
+<th rowspan="2">20</th>
+<th rowspan="2"><blockquote>
+<p>40 60</p>
+</blockquote>
+<p>Epoch</p></th>
+<th rowspan="2">80</th>
+<th rowspan="2"><blockquote>
+<p>100</p>
+</blockquote></th>
+</tr>
+<tr class="header">
+<th><blockquote>
+<p>40 60</p>
+</blockquote>
+<p>Epoch</p></th>
+<th>80</th>
+<th><blockquote>
+<p>100</p>
+</blockquote></th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+
+> Figure 4: Accuracy vs Epoch. The comparison of the test and training
+> accuracy of Nerva and PyTorch during training on CIFAR-10 with various
+> sparsity levels, over three runs with different seeds.
+
+<img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image12.png"
+style="width:1.81944in;height:0.875in" /><img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image13.png"
+style="width:1.81944in;height:0.875in" /><img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image14.png"
+style="width:1.81944in;height:0.88889in" /><img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image15.png"
+style="width:1.81944in;height:0.88889in" /><img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image16.png"
+style="width:1.81944in;height:0.875in" /><img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image17.png"
+style="width:1.81944in;height:0.875in" /><img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image18.png"
+style="width:1.81944in;height:0.875in" /><img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image19.png"
+style="width:1.81944in;height:0.875in" />
+
+> Accepted at the ICLR 2023 Workshop on Sparsity in Neural Networks
+
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th rowspan="5"><blockquote>
+<p><strong>C.2</strong></p>
+</blockquote></th>
+<th colspan="3"><blockquote>
+<p><strong>Loss-vs-epoch</strong></p>
+</blockquote></th>
+<th rowspan="5"><blockquote>
+<p>Loss</p>
+</blockquote></th>
+<th rowspan="3">3</th>
+<th rowspan="2"><blockquote>
+<p>Loss vs Epoch (Sparsity: 0.5)</p>
+</blockquote></th>
+</tr>
+<tr class="odd">
+<th rowspan="4"><blockquote>
+<p>Loss</p>
+</blockquote></th>
+<th rowspan="2"><blockquote>
+<p>3</p>
+</blockquote></th>
+<th><blockquote>
+<p>Loss vs Epoch (dense)</p>
+</blockquote></th>
+</tr>
+<tr class="header">
+<th rowspan="3"><blockquote>
+<p>Nerva loss<br />
+PyT orch loss</p>
+</blockquote></th>
+<th rowspan="3"><blockquote>
+<p>Nerva loss<br />
+PyT orch loss</p>
+</blockquote></th>
+</tr>
+<tr class="odd">
+<th><blockquote>
+<p>2</p>
+</blockquote></th>
+<th>2</th>
+</tr>
+<tr class="header">
+<th><blockquote>
+<p>1</p>
+</blockquote></th>
+<th>1</th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+
+<table style="width:100%;">
+<colgroup>
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+<col style="width: 7%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th rowspan="5"><blockquote>
+<p>Loss</p>
+</blockquote></th>
+<th>0</th>
+<th>0</th>
+<th>20</th>
+<th><blockquote>
+<p>40 60</p>
+</blockquote>
+<p>Epoch</p></th>
+<th>80</th>
+<th><blockquote>
+<p>100</p>
+</blockquote></th>
+<th rowspan="5"><blockquote>
+<p>Loss</p>
+</blockquote></th>
+<th>0</th>
+<th>0</th>
+<th>20</th>
+<th><blockquote>
+<p>40 60</p>
+</blockquote>
+<p>Epoch</p></th>
+<th>80</th>
+<th><blockquote>
+<p>100</p>
+</blockquote></th>
+</tr>
+<tr class="odd">
+<th rowspan="2">3</th>
+<th colspan="5"><blockquote>
+<p>Loss vs Epoch (Sparsity: 0.8)</p>
+</blockquote></th>
+<th rowspan="2">3</th>
+<th colspan="5"><blockquote>
+<p>Loss vs Epoch (Sparsity: 0.9)</p>
+</blockquote></th>
+</tr>
+<tr class="header">
+<th colspan="5" rowspan="3"><blockquote>
+<p>Nerva loss<br />
+PyT orch loss</p>
+</blockquote></th>
+<th colspan="5" rowspan="3"><blockquote>
+<p>Nerva loss<br />
+PyT orch loss</p>
+</blockquote></th>
+</tr>
+<tr class="odd">
+<th>2</th>
+<th>2</th>
+</tr>
+<tr class="header">
+<th>1</th>
+<th>1</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td rowspan="6"><blockquote>
+<p>Loss</p>
+</blockquote></td>
+<td>0</td>
+<td rowspan="2">0</td>
+<td rowspan="2">20</td>
+<td rowspan="2"><blockquote>
+<p>40 60</p>
+</blockquote>
+<p>Epoch</p></td>
+<td rowspan="2">80</td>
+<td rowspan="2"><blockquote>
+<p>100</p>
+</blockquote></td>
+<td rowspan="6"><blockquote>
+<p>Loss</p>
+</blockquote></td>
+<td>0</td>
+<td rowspan="2">0</td>
+<td rowspan="2">20</td>
+<td rowspan="2"><blockquote>
+<p>40 60</p>
+</blockquote>
+<p>Epoch</p></td>
+<td rowspan="2">80</td>
+<td rowspan="2"><blockquote>
+<p>100</p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td rowspan="3">3</td>
+<td rowspan="3">3</td>
+</tr>
+<tr class="odd">
+<td colspan="5"><blockquote>
+<p>Loss vs Epoch (Sparsity: 0.95)</p>
+</blockquote></td>
+<td colspan="5"><blockquote>
+<p>Loss vs Epoch (Sparsity: 0.99)</p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td colspan="5" rowspan="3"><blockquote>
+<p>Nerva loss<br />
+PyT orch loss</p>
+</blockquote></td>
+<td colspan="5" rowspan="3"><blockquote>
+<p>Nerva loss<br />
+PyT orch loss</p>
+</blockquote></td>
+</tr>
+<tr class="odd">
+<td>2</td>
+<td>2</td>
+</tr>
+<tr class="even">
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td rowspan="8">Loss</td>
+<td>0</td>
+<td rowspan="2">0</td>
+<td rowspan="2">20</td>
+<td rowspan="2"><blockquote>
+<p>40 60</p>
+</blockquote>
+<p>Epoch</p></td>
+<td rowspan="2">80</td>
+<td rowspan="2"><blockquote>
+<p>100</p>
+</blockquote></td>
+<td rowspan="8">Loss</td>
+<td>0</td>
+<td rowspan="2">0</td>
+<td rowspan="2">20</td>
+<td rowspan="2"><blockquote>
+<p>40 60</p>
+</blockquote>
+<p>Epoch</p></td>
+<td rowspan="2">80</td>
+<td rowspan="2"><blockquote>
+<p>100</p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td rowspan="3">3</td>
+<td rowspan="3">3</td>
+</tr>
+<tr class="odd">
+<td colspan="5"><blockquote>
+<p>Loss vs Epoch (Sparsity: 0.995)</p>
+</blockquote></td>
+<td colspan="5" rowspan="3"><blockquote>
+<p>Loss vs Epoch (Sparsity: 0.999)</p>
+</blockquote></td>
+</tr>
+<tr class="even">
+<td colspan="5" rowspan="2"><blockquote>
+<p>Nerva loss<br />
+PyT orch loss</p>
+</blockquote></td>
+</tr>
+<tr class="odd">
+<td>2</td>
+<td>2</td>
+</tr>
+<tr class="even">
+<td>1</td>
+<td rowspan="3">0</td>
+<td rowspan="3">20</td>
+<td rowspan="3"><blockquote>
+<p>40 60</p>
+</blockquote>
+<p>Epoch</p></td>
+<td rowspan="3">80</td>
+<td rowspan="3"><blockquote>
+<p>100</p>
+</blockquote></td>
+<td>1</td>
+<td colspan="5" rowspan="2"><blockquote>
+<p>Nerva loss<br />
+PyT orch loss</p>
+</blockquote></td>
+</tr>
+<tr class="odd">
+<td rowspan="2">0</td>
+<td rowspan="2">0</td>
+</tr>
+<tr class="even">
+<td>0</td>
+<td>20</td>
+<td><blockquote>
+<p>40 60</p>
+</blockquote>
+<p>Epoch</p></td>
+<td>80</td>
+<td><blockquote>
+<p>100</p>
+</blockquote></td>
+</tr>
+</tbody>
+</table>
+
+> Figure 5: Loss vs Epoch. The comparison of learning curves of Nerva
+> and PyTorch during training on CIFAR-10 with various sparsity levels,
+> over three runs with different seeds.
+
+<img src="vertopal_92a53364dd7643959216cd93ca4e7d81/media/image20.png"
+style="width:3.44444in;height:2.58333in" />
+
+> Accepted at the ICLR 2023 Workshop on Sparsity in Neural Networks
+
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th><blockquote>
+<p><strong>C.3</strong></p>
+</blockquote></th>
+<th><blockquote>
+<p><strong>Runtime</strong></p>
+</blockquote></th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+
+> In Figure 6 we show a zoomed-out plot compared to Figure 2 in the main
+> body. It shows that for low sparsity levels like 50% the sparse matrix
+> operations do not show their benefit yet. In these cases using binary
+> masks is faster. We plan to implement both options in Nerva, such that
+> it can always use the fastest option.
+
+Time vs Sparsity
+
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th rowspan="4"><blockquote>
+<p>Training time (minutes)</p>
+</blockquote></th>
+<th><blockquote>
+<p>50</p>
+</blockquote></th>
+<th rowspan="4"><blockquote>
+<p>Nerva<br />
+Nerva dense<br />
+PyT orch<br />
+PyT orch dense</p>
+</blockquote></th>
+</tr>
+<tr class="odd">
+<th><blockquote>
+<p>40</p>
+</blockquote></th>
+</tr>
+<tr class="header">
+<th><blockquote>
+<p>30</p>
+</blockquote></th>
+</tr>
+<tr class="odd">
+<th><blockquote>
+<p>20</p>
+</blockquote></th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+
+> 10
+
+<table>
+<colgroup>
+<col style="width: 12%" />
+<col style="width: 12%" />
+<col style="width: 12%" />
+<col style="width: 12%" />
+<col style="width: 12%" />
+<col style="width: 12%" />
+<col style="width: 12%" />
+<col style="width: 12%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>0</th>
+<th><blockquote>
+<p>0.5</p>
+</blockquote></th>
+<th>0.6</th>
+<th>0.7</th>
+<th>Sparsity</th>
+<th><blockquote>
+<p>0.8</p>
+</blockquote></th>
+<th>0.9</th>
+<th><blockquote>
+<p>1.0</p>
+</blockquote></th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+
+> Figure 6: The total training time of 100 epochs for CIFAR-10, on a
+> regular desktop with 4 CPU cores. As the sparsity level increases, the
+> running time of Nerva goes down linearly, as it takes advantage of
+> sparse matrix operations. The running time for PyTorch stays roughly
+> constant, because it uses binary masks.
