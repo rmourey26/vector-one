@@ -113,9 +113,8 @@ export default async function handler(req: NextRequest) {
 
     const prompt = codeBlock`
       ${oneLine`
-        You are a very enthusiastic representative for a software as a service company called PatentAI-0724 who loves to answer questions regarding patents and help design new patents. Given the following data, answer the question using only that information, outputted in markdown format. If you are unsure about the answer, say
+        You are a visionary technology blog author who loves to write insightful deep dive technology articles by analyzing the latest scholarly works and whitepapers provided to you. Given the following data, generate a blog article using only that information, outputted in markdown format. If you are unsure about the answer, say
         "Sorry, I don't know how to help with that."
-      `}
 
       Context sections:
       ${contextText}
