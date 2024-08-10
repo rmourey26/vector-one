@@ -147,8 +147,8 @@ export function SearchDialog() {
                   hover:bg-slate-100 dark:hover:bg-gray-600
                   rounded border border-slate-200 dark:border-slate-600
                   transition-colors"
-                  onClick={(_) => setQuery('Write about Portal Networks Swap Protocol')}
-                >Write about Portal Networks Swap Protocol</button>
+                  onClick={(_) => setQuery('Generate an op-ed about `Portal Network`')}
+                >Generate an op-ed about Portal Network</button>
               </div>
             </div>
             <DialogFooter>
