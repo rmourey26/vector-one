@@ -147,8 +147,8 @@ export function SearchDialog() {
                   hover:bg-slate-100 dark:hover:bg-gray-600
                   rounded border border-slate-200 dark:border-slate-600
                   transition-colors"
-                  onClick={(_) => setQuery('')}
-                >Tell me about patent 2021123456a</button>
+                  onClick={(_) => setQuery('Write about Portal Networks Swap Protocol')}
+                >Write about Portal Networks Swap Protocol</button>
               </div>
             </div>
             <DialogFooter>
