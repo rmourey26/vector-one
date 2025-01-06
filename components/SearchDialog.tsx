@@ -77,9 +77,9 @@ export function SearchDialog() {
       <Dialog open={open}>
         <DialogContent className="sm:max-w-[850px] max-h-[80vh] overflow-y-auto text-black">
           <DialogHeader>
-            <DialogTitle>AI Blogger Test </DialogTitle>
+            <DialogTitle>OpenAI Embedding Automator</DialogTitle>
             <DialogDescription>
-             Augment ChatGPT&lsquo;s knowledge with your own data and without any code.</DialogDescription>
+             High quality embeddings for chatbots and model development</DialogDescription>
             <hr />
             <button className="absolute top-0 right-2 p-2" onClick={() => setOpen(false)}>
               <X className="h-4 w-4 dark:text-gray-100" />
@@ -147,8 +147,8 @@ export function SearchDialog() {
                   hover:bg-slate-100 dark:hover:bg-gray-600
                   rounded border border-slate-200 dark:border-slate-600
                   transition-colors"
-                  onClick={(_) => setQuery('Tell me about Ethereum improvement proposals')}
-                >Tell me about Ethereum improvement proposals</button>
+                  onClick={(_) => setQuery('Tell me about Ethereum improvement proposal EIP-3643')}
+                >Tell me about Ethereum improvement proposal EIP-3643</button>
               </div>
             </div>
             <DialogFooter>
