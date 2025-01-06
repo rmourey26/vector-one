@@ -147,8 +147,8 @@ export function SearchDialog() {
                   hover:bg-slate-100 dark:hover:bg-gray-600
                   rounded border border-slate-200 dark:border-slate-600
                   transition-colors"
-                  onClick={(_) => setQuery('Tell me about Ethereum improvement proposal EIP-3643')}
-                >Tell me about Ethereum improvement proposal EIP-3643</button>
+                  onClick={(_) => setQuery('Tell me about Ethereum improvement proposals')}
+                >Tell me about Ethereum improvement proposals</button>
               </div>
             </div>
             <DialogFooter>
