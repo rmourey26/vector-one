@@ -79,7 +79,7 @@ export function SearchDialog() {
           <DialogHeader>
             <DialogTitle>OpenAI Embedding Automator</DialogTitle>
             <DialogDescription>
-             High quality embeddings for chatbots and model development</DialogDescription>
+             High quality embeddings for chatbots and model development.</DialogDescription>
             <hr />
             <button className="absolute top-0 right-2 p-2" onClick={() => setOpen(false)}>
               <X className="h-4 w-4 dark:text-gray-100" />
