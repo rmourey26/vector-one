@@ -26,9 +26,9 @@ export default function Home() {
 
         <div className="py-8 w-full flex items-center justify-center space-x-6">
           <div className="opacity-75 transition hover:opacity-100 cursor-pointer">
-            <Link href="https://supabase.com" className="flex items-center justify-center">
+            <Link href="https://linkedin.com/robertmoureyjr" className="flex items-center justify-center">
               <p className="text-base mr-2">Built by Robert Mourey Jr</p>
-              <Image src={'/bcc-logo.svg'} width="20" height="20" alt="Supabase logo" />
+              <Image src={'/bcc-logo.svg'} width="20" height="20" alt="The BlockchainCompany.IO logo" />
             </Link>
           </div>
           <div className="border-l border-gray-300 w-1 h-4" />
