@@ -26,7 +26,7 @@ export default function Home() {
 
         <div className="py-8 w-full flex items-center justify-center space-x-6">
           <div className="opacity-75 transition hover:opacity-100 cursor-pointer">
-            <Link href="https://linkedin.com/robertmoureyjr" className="flex items-center justify-center">
+            <Link href="https://linkedin.com/in/robertmoureyjr" className="flex items-center justify-center">
               <p className="text-base mr-2">Built by Robert Mourey Jr</p>
               <Image src={'/bcc-logo.svg'} width="20" height="20" alt="The BlockchainCompany.IO logo" />
             </Link>
